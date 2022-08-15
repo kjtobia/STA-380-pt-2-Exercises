@@ -1,0 +1,422 @@
+---
+title: "STA 380 Pt 2 Exercises"
+author: "Kyle Tobia"
+date: "2022-08-15"
+output:
+  pdf_document: default
+---
+
+## Probability Practice
+### Part A
+Given:
+
+
+$P(RC) = 0.3$
+
+
+$P(Yes) = 0.65$
+
+
+$P(No) = 0.35$
+
+
+Thus:
+
+
+$P(TC) = 1 - P(RC) = 0.7$
+
+
+$P(YES|RC) = 0.5$
+
+
+$P(NO|RC) = 0.5$
+
+
+$P(YES) = P(YES|RC)*P(RC) + P(YES|TC)*P(TC)$
+
+
+$.65 = .5*.3+P(YES|TC)*.7$
+
+
+$P(YES|TC) = .7143$
+
+### Part B
+Given:
+
+
+$P(P|HIV) = .993$
+
+
+$P(N|NO HIV) = .9999$
+
+
+$P(HIV) = .000025$
+
+
+
+Thus:
+
+
+$P(N|HIV) = 1-P(P|HIV) = 1-.993 = .007$
+
+
+$P(P|NO HIV) = 1 - P(N|NO HIV) = .0001$
+
+
+$P(NO HIV) = 1 - .000025$
+
+
+
+$P(HIV|P) = P(P|HIV)*P(HIV)/P(P)$
+
+
+$P(HIV|P) = .993*.000025/P(P)$
+
+
+$P(P) = P(P|HIV)*P(HIV) +P(P|NO HIV)*P(NO HIV)$
+
+
+$P(P) = .993*.000025 +.0001*.999975$
+
+
+$P(P) = .0001248225$
+
+
+$P(HIV|P) = .993*.000025/.0001248225$
+
+
+$P(HIV|P) = .1988824$
+
+
+
+## Wrangling the Billboard Top 100
+### Part A
+
+```{r, warning=FALSE, echo = FALSE, message = FALSE}
+library(dplyr)
+billboard = read.csv("C:/Users/horne/Downloads/billboard.csv")
+grouped_bill = billboard %>% group_by(performer, song) %>%
+summarize_at(vars(week), funs(length)) 
+grouped_bill = grouped_bill %>% rename(count=week)
+knitr::kable(head(grouped_bill, 10), caption="Billboard")
+```
+
+```{r, echo= FALSE}
+top10 = grouped_bill[order(grouped_bill$count, decreasing=TRUE),][1:10,]
+```
+
+```{r, echo=FALSE}
+knitr::kable(top10, caption="10 popular songs")
+```
+### Part B
+Excluding years $1958$ and $2021$:
+```{r, echo=FALSE}
+grouped_bill2 = billboard %>% group_by(year) %>% summarise(n_distinct(song))
+grouped_bill2 = grouped_bill2[grouped_bill2$year!= 1958, ]
+grouped_bill2 = grouped_bill2[grouped_bill2$year!= 2021, ]
+grouped_bill2 = grouped_bill2[order(grouped_bill2$year, decreasing=FALSE),]
+```
+
+```{r, echo=FALSE, fig.align='center'}
+div_years = plot(grouped_bill2$year, grouped_bill2$`n_distinct(song)`, type = 'l', xlab = 'Year', ylab = 'musical diversity')
+```
+The above plot shows high levels of diversity around the years $1965$ and $2020$ for the billboard top $100$. Also, the plot shows extremely low levels of diversity around the years $2000$ to $2001$.
+
+### Part C
+Filtering df from part a to only include songs with at least $10$ weeks on the charts:
+```{r}
+tenWeek = grouped_bill[grouped_bill$count>=10,]
+```
+Selecting artists with at least $30$ hits:
+```{r, echo= FALSE, fig.align='center'}
+grouped_bill3 = tenWeek %>% group_by(performer) %>% summarize_at(vars(song), funs(length))
+thirtyHit = grouped_bill3[grouped_bill3$song>=30, ]
+```
+
+```{r, echo=FALSE, warning = FALSE, fig.align='center'}
+library(ggplot2)
+ggplot(data=thirtyHit, aes(x=performer, y=song)) + geom_bar(stat="identity", fill="red") + labs(y = "# of hits (10 weeks)") + theme(axis.text.x=element_text(angle = -90))
+```
+Seems that Elton John has more hits (of at least $10$ weeks) than the other artists.
+
+
+## Visual story telling
+### Part 1: green buildings
+```{r}
+green = read.csv("C:/Users/horne/Downloads/greenbuildings.csv")
+green = select(green, -c(empl_gr))
+```
+
+Removing outliers:
+```{r, echo=FALSE, fig.align='center'}
+par(mfrow = c(1, 3))
+boxplot(green$leasing_rate, ylab='Occupancy')
+boxplot(green$Rent, ylab='Rent')
+boxplot(green$size, ylab='Size')
+```
+Concluded that below $40$% rather than the suggested $10$%
+
+```{r, message=FALSE, results='hide'}
+green[green$leasing_rate<40,]
+```
+Chose not to remove the outliers from rent, because the green buildings have higher rents, so removing these would take out the green buildings data. Also chose not to remove the size outliers as size and rent are correlated positively. And, by the same token we mentioned to not remove the rent outliers, a lot of the green buildings data would be removed. So, we only removed the $40$% of the rows from occupancy.
+
+
+Setting up correlation matrix and we reordering its so that the distance is the correlation between variables:
+```{r, message = FALSE}
+library(reshape2)
+library(ggplot2)
+c_mat = round(cor(green),2)
+reorderc_mat <- function(c_mat){
+  dd = as.dist((1-c_mat)/2)
+  hc = hclust(dd)
+  c_mat = c_mat[hc$order, hc$order]
+}
+```
+
+
+Heatmap to show correlations:
+
+
+```{r, echo = FALSE, fig.align='center'}
+c_mat = reorderc_mat(c_mat)
+melt_c= melt(c_mat, na.rm = TRUE)
+heatmap = ggplot(melt_c, aes(Var2, Var1, fill = value))+
+ geom_tile(color = "white")+
+ scale_fill_gradient2(low = "dark blue", high = "red", mid = "grey", 
+   midpoint = 0, limit = c(-1,1), space = "Lab", 
+    name="Corr") +
+  theme_minimal()+ 
+  theme(text = element_text(size = 8)) +
+ theme(axis.text.x = element_text(angle = 90)) +
+ coord_fixed()
+print(heatmap)
+```
+Rent is largely positvely correlated with clusters because certain neighborhoods are more expensive than other neighborhoods. As a result, we used cluster rent as a variable.
+
+
+Rent and Cluster has a high positive correlation, because some neighborhoods are more expensive than others. So, instead of taking the median rent throughout our dataset, we can just use the cluster rent variable.
+
+
+Additionally, size and stories are both positively correlated with rent. This makes sense, as the more stories, the larger the size. 
+
+
+Also, rent is not correlated with Energy Star, LEED, nor green rating.
+
+
+And, leasing rate is positively correlated with rent.
+
+
+Scatterplots:
+
+
+```{r, echo=FALSE, fig.align='center'}
+par(mfrow=c(2, 3))
+plot(green$cluster, green$cluster_rent)
+plot(green$size, green$Rent)
+plot(green$leasing_rate, green$Rent)
+plot(green$class_a, green$Rent)
+plot(green$class_b, green$Rent)
+```
+Seems that from these scatterplots, that the builders should build class A buildings into a higher rent cluster to be able to charge more rent. This comes from the scatterplots showing that the rent for class A buildings have more data points in the positive class and that class B buildings have more rent in the negative class. It seems that classes a and b have opposite correlations to each other with the other variables.
+
+
+Separating the green v. non green buildings:
+
+
+```{r}
+green_buildings = subset(green,green$green_rating == 1)
+non_green_buildings = subset(green,green$green_rating!= 1)
+```
+
+
+```{r, echo = FALSE, fig.align='center'}
+par(mfrow = c(1, 2))
+plot(density(green_buildings$Rent), lwd = 2, col = "green", main = "Rent Density", ylim=c(0, 0.1))
+set.seed(1)
+lines(density(non_green_buildings$Rent), col = "red", lwd = 2)
+legend("top", legend=c("Green Buildings", "Non-green Buildings"), col = c("green", "red"), lty=1:1, cex=0.8)
+plot(density(green_buildings$cluster_rent), lwd = 2, col = "red", main = "Cluster-rent Density", ylim=c(0, 0.1))
+set.seed(1)
+
+lines(density(non_green_buildings$cluster_rent), col = "green", lwd = 2)
+legend("top", legend=c("Green Buildings", "Non-green Buildings"), col = c("green", "red"), lty=1:1, cex=0.8)
+```
+Neither of these density plots seem to be normal. Both of them seem to be right-skewed. From the long tails, we found that the data was skewed towards the buildings with lower rent. The green buildings seems to have a peak that is slightly higher than non-green buildings for rent. For the cluster rent density, the peak for non-green buildings occurs just before green buildings, but its lower than that of the green buildings. From each of these four density plots, we concluded that the clusters in the data must have more normal distributions themselves, as these seem to appear as a sum of many distributions. 
+
+
+
+Issues with analyst:
+
+
+One issue that we had with the analyst was that he did not take  variables which may inhibit the ability to charge high rent into account such as comparing class A v. class B. Another issue was that he did not cluster rent, and when we did so, we did not find that green buildings had a rent premium.
+
+
+Confounding variables:
+
+
+```{r, echo=FALSE, fig.align='center'}
+par(mfrow=c(1, 2))
+boxplot(green_buildings$Gas_Costs, ylab = 'Gas costs', xlab='Green buildings')
+boxplot(green_buildings$Electricity_Costs, ylab = 'Electricity costs', xlab='Green buildings')
+```
+While one would think that a building would be "green" by having low electricity and gas costs, we found that some of the "green" buildings had extremely high electricity and gas costs. As a result, we removed these from our analysis.
+
+
+### Part 2: Capital Metro Data
+Boardings by month:
+
+
+```{r, echo=FALSE, fig.align='center'}
+capmetro_UT = read.csv("C:/Users/horne/Downloads/capmetro_UT.csv")
+ggplot(capmetro_UT, aes(month)) +
+  geom_bar() +ggtitle("Boardings (by month)")+theme(plot.title = element_text())
+```
+
+
+Alightings by month:
+
+
+```{r, fig.align='center'}
+ggplot(capmetro_UT, aes(month)) +
+  geom_bar()+ggtitle("Alightings (by month)")+theme(plot.title = element_text())
+```
+
+
+Boarding and alighting correlation:
+
+
+```{r}
+cor(capmetro_UT$boarding,capmetro_UT$alighting)
+```
+
+
+Comparing of boarding and alighting by month:
+
+
+```{r, fig.align='center',echo= FALSE, message = FALSE, warning = FALSE}
+newdf = capmetro_UT %>% group_by(month,hour_of_day) %>% summarise(mean_boarding = mean(boarding),mean_alighting=mean(alighting))
+Legend = rep("Boarding", 48)
+alighting_legend = rep("Alighting", 48)
+ggplot(newdf, aes(hour_of_day)) + geom_line(aes(y=mean_boarding, color=Legend), group=1) + geom_line(aes(y=mean_alighting, color=alighting_legend), group=1)  + labs(x = "Month", y = "Average # of people", title = "Boarding vs alighting averages by month") + facet_grid(~month, scale='free_y')
+```
+
+
+The hour of day is on the x axis, and it can be seen, from intiution, that alighting is higher earlier in the day, and it decreases later, and that boarding is lower earlier in the day, and it increases later. Both alighting and boarding averages are highest in October. Next highest for both are in september, followed by November. We believe the reasoning here is that most students take time to learn the transit system in the earlier months of the year (Aug, Sept), here, September. So, once the students have a grasp of the system in October, the averages will be higher then than in September. For November being the lowest, we postulated that it may be due to the Thanksgiving break, as there are less school days in November than the previous other months.
+
+
+Comparing Boarding v. Alighting by temperature:
+
+
+```{r,warning=FALSE,fig.align='center',echo=FALSE, message = FALSE}
+dfTemp = capmetro_UT %>% group_by(month,hour_of_day) %>% summarise(mean_boarding = mean(boarding),mean_alighting = mean(alighting), mean_temperature = mean(temperature))
+board_legend = rep("Boarding", 48)
+alight_legend = rep("Alighting", 48)
+temp_legend = rep("temperature",48)
+ggplot(dfTemp, aes(hour_of_day)) + geom_line(aes(y=mean_boarding, color=board_legend), group=1) + geom_line(aes(y=mean_alighting, color=alight_legend), group=1) +  geom_line(aes(y=mean_temperature, color=temp_legend), group=1) + labs(x = "Month", y = "Average number of people", title = "Boarding vs alighting based on Temperature") + facet_grid(~month, scale='free_y')
+```
+We could not find any patterns in boarding and alighting that were impacted by temperature. Thus, we concluded that the temperature that day does not greatly impact the average boarding or alighting by hour. We postulated that students feel obligated to alight/board regardless of temperature because of their duty as a student. 
+
+
+## Portfolio Modeling
+Chose the ETFs: SPY (ETF for the SP$500$) so the portfolio can be diversified and follow along with market trends of the largest $500$ companies, QQQ so we could capture gains from tech stocks as we believe technology to be the future of the US Economy, and the VNQ (Vanguard Real Estate ETF) to expose our portfolio to the real estate market.
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+library(quantmod)
+library(resample)
+library(foreach)
+library(mosaic)
+
+my_stocks <- c("SPY", "QQQ", "VNQ")
+getSymbols(my_stocks, from = "2016-08-15")
+```
+Adjusting for splits, dividends, etc.:
+
+
+```{r, warning = FALSE}
+for (stock in my_stocks){
+  expr <- paste0(stock, "a <- adjustOHLC(", stock ,")")
+  eval(parse(text = expr))
+}
+returns <- cbind(ClCl(SPYa), ClCl(QQQa), ClCl(VNQa))
+returns <- as.matrix(na.omit(returns))
+summary(returns)
+```
+Correlations:
+```{r, include=FALSE}
+pairs(returns)
+```
+There is a strong, linear correlation between each of the stocks, however the correlation is stronger between the SPY and the QQQ.
+Even Weights Simulation:
+
+
+```{r}
+sim_1 <- matrix(0, nrow = 8000, ncol = 20)
+for(i in 1:8000){
+  totalwealth <- 100000
+  for (j in 1:20){
+    wealth <- totalwealth
+    w1 <- c(1/3, 1/3, 1/3)
+    sim_w1 <- wealth*w1
+    sample_day <- resample(returns, 1, orig.ids = FALSE)
+    sample_return <- sim_w1 + sim_w1* sample_day
+    wealth_total <- sum(sample_return)
+    sim_1[i,j] <- wealth_total
+  }
+}
+```
+
+
+Plotting simulation $1$ profits:
+```{r}
+ggplot(mapping = aes(sim_1[,20] - 100000)) +
+  geom_histogram(bins = 30) +
+  labs(x = "Profit (net)",
+       title = "Net Profit Distribution",
+       subtitle = "Even Weights Simulation")
+```
+Seems that from the low risk simulation, we are more likely to make money than lose, based on the distribution appearing normal, with larger peaks in the positive net profit than the negative. Overall though, the distribution appears relatively normal.
+
+
+Since the QQQ and the SPY seem to be positively correlated, with QQQ having a larger mean payout, we increases the weight of the QQQ and decreases the weights of the SPY to hopefully create a higher return portfolio:
+```{r}
+sim_2 <- matrix(0, nrow = 8000, ncol = 20)
+for(i in 1:8000){
+  totalwealth <- 100000
+  for (j in 1:20){
+    wealth <- totalwealth
+    w2 <- c(.5-1/3, .5, 1/3)
+    sim_w2 <- wealth*w2
+    sample_day <- resample(returns, 1, orig.ids = FALSE)
+    sample_return <- sim_w2 + sim_w2* sample_day
+    wealth_total <- sum(sample_return)
+    sim_2[i,j] <- wealth_total
+  }
+}
+```
+
+
+Plotting simulation $2$ profits:
+```{r}
+ggplot(mapping = aes(sim_2[,20] - 100000)) +
+  geom_histogram(bins = 30) +
+  labs(x = "Profit (net)",
+       title = "Net Profit Distribution",
+       subtitle = "Higher Return Distribution")
+```
+
+
+Comparing mean net profits of both simulations:
+```{r}
+mean(sim_1[,20]-100000)
+mean(sim_2[,20])-100000
+```
+
+
+Comparing value at risk (VaR) of both simulations:
+```{r}
+quantile(sim_1[,20] - 100000, 0.05)
+quantile(sim_2[,20] - 100000, 0.05)
+```
+Based on common knowledge, the portfolio that was "safer", here, the equal weight portfolio, will have a lower average return, but a lower value at risk than the portfolio that is looking to gain more return. And that intuition is seen on display here, as the first simulation had a lower mean net profit and a lower VaR, while the second simulation had a higher mean net profit and a higher VaR.
+
+
